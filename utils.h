@@ -12,15 +12,15 @@
 
 #define CELL_T_BORDER 0
 #define CELL_T_FLUID 1
-#define CELL_SIZE 24
+#define CELL_SIZE 5
 
 #define X_OFFSET 1
 #define Y_OFFSET 0
 
-#define GRID_WIDTH 32
-#define GRID_HEIGHT 18
+#define GRID_WIDTH 160
+#define GRID_HEIGHT 90
 
-#define GRAVITY 1.0f
+#define GRAVITY 10.0f
 #define OVERRELAXATION_VAL 1.9f
 
 //No modificar, estas macros permiten elegir el tipo de muestrado usado en la funcion sample_field()
@@ -47,6 +47,9 @@ typedef struct COLOR
 
 typedef struct FLUID
 {
+    double intake_speed;
+    double gravity;
+    
     double** u;
     double** v;
     double** newU;

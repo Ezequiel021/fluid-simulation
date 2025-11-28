@@ -1,7 +1,17 @@
 #include "utils.h"
 
-int main()
+int main(int argc, char** argv)
 {
+    int show_fps = 0, debug = 0;
+    if (argc > 1 && !strcmp(argv[1], "--fps"))
+    {
+        show_fps = 1;
+    }
+    if (argc > 1 && !strcmp(argv[1], "--debug"))
+    {
+        debug = 1;
+    }
+
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
 
@@ -43,7 +53,7 @@ int main()
         LAST = NOW;
         NOW = SDL_GetPerformanceCounter();
         deltaTime = (double)((NOW - LAST) * 1000 / (double)SDL_GetPerformanceFrequency());
-        if (__SHOW_FPS)
+        if (show_fps)
             printf("%f - %.1f fps   \r", deltaTime, 1000.0f / deltaTime);
 
         SDL_PollEvent(&eventHandler);
@@ -54,7 +64,7 @@ int main()
             {
             case SDL_SCANCODE_P:
                 isPaused = !isPaused;
-                if (!__SHOW_FPS) printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
+                if (!show_fps) printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
                 break;
             case SDL_SCANCODE_M:
                 step = 1;
@@ -80,7 +90,7 @@ int main()
         else if (step)
         {
             update(renderer, deltaTime, &fluid);
-            if (!__SHOW_FPS)printf("Avanzando un paso\n");
+            if (!show_fps)printf("Avanzando un paso\n");
             isPaused = 1;
             step = 0;
         }

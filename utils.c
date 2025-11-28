@@ -31,6 +31,21 @@ int new_double2D(double ***array, Uint32 rows, Uint32 cols)
 
 int fluid_setup(Fluid *f)
 {
+    FILE* config = fopen("config.txt", "r");
+    if (!config)
+    {
+        fprintf(stderr, "Error al abrir el archivo de configuracion\n");
+        return 1;
+    }
+
+    double gravity, intake;
+    fscanf(config, "%lf", &gravity);
+    fscanf(config, "%lf", &intake);
+    fclose(config);
+    f->gravity = gravity;
+    f->intake_speed = intake;
+    printf("Gravity = %f\nIntake Velocity = %f\n", f->gravity, f->intake_speed);
+
     if (__DEBUG)
         printf("Inicializando simulacion\n");
 
@@ -79,31 +94,26 @@ int fluid_setup(Fluid *f)
     if (__DEBUG)
         printf("Memoria asignada con exito\n");
 
-    double inTakeVelocity = 2.0f;
+    // En utils.c -> fluid_setup
+    double inTakeVelocity = 1.0f;
     for (int i = 0; i < f->height; i++)
     {
         for (int j = 0; j < f->width; j++)
         {
             f->u[i][j] = 0.0f;
             f->v[i][j] = 0.0f;
-            f->m[i][j] = 1.0f;
+            f->m[i][j] = 0.0f; // <--- CAMBIO 1: Fondo negro (vacío) en lugar de 1.0
 
-            if (j == 0 || i == 0 || i == f->height - 1)
+            // CAMBIO 2: Agregamos la pared DERECHA (j == f->width - 1) que faltaba
+            if (j == 0 || j == f->width - 1 || i == 0 || i == f->height - 1)
                 f->scalar[i][j] = 0.0f;
             else
                 f->scalar[i][j] = 1.0f;
+            
+            // Inyectamos velocidad inicial
             if (j == 1)
                 f->u[i][j] = inTakeVelocity;
         }
-    }
-
-    int pipeHeight = 0.1f * f->height;
-    int pipeLowerBound = 0.5f * (f->height - pipeHeight);
-    int pipeHigherBound = 0.5f * (f->height + pipeHeight);
-
-    for (int i = pipeLowerBound; i < pipeHigherBound; i++)
-    {
-        f->m[i][1] = 0.0f;
     }
 
     if (__DEBUG)
@@ -120,7 +130,7 @@ void fluid_integrate(Fluid *f, double deltaTime)
         {
             if (f->scalar[i][j] != 0.0f && f->scalar[i - 1][j] != 0.0f)
             {
-                f->v[i][j] += 0.001 * GRAVITY * deltaTime;
+                f->v[i][j] += 0.001 * f->gravity * deltaTime;
             }
         }
     }
@@ -159,21 +169,42 @@ void fluid_solveIncompressibility(Fluid* f, double deltaTime)
 
 void fluid_extrapolate(Fluid *f)
 {
+    // Límite Izquierdo y Derecho
     for (int i = 0; i < f->height; i++)
     {
-        f->v[i][0] = f->v[i][1];
-        f->v[i][f->width - 1] = f->v[i][f->width - 2];
+        // En lugar de copiar ( f->v[i][1] ), forzamos 0
+        f->v[i][0] = 0.0f; 
+        f->v[i][f->width - 1] = 0.0f;
+        
+        f->u[i][0] = 0.0f;
+        f->u[i][f->width - 1] = 0.0f;
     }
 
+    // Límite Superior e Inferior
     for (int j = 0; j < f->width; j++)
     {
-        f->u[0][j] = f->u[1][j];
-        f->u[f->height - 1][j] = f->u[f->height - 2][j];
+        f->u[0][j] = 0.0f;
+        f->u[f->height - 1][j] = 0.0f;
+
+        f->v[0][j] = 0.0f;
+        f->v[f->height - 1][j] = 0.0f;
     }
 }
 
 int simulate(Fluid* f, double delta)
 {
+    // --- NUEVO CÓDIGO: REFORZAR LA ENTRADA CONSTANTE ---
+    double inTakeVelocity = f->intake_speed; // Velocidad deseada
+    int pipeHeight = 0.2f * f->height;
+    int pipeLowerBound = 0.5f * (f->height - pipeHeight);
+    int pipeHigherBound = 0.5f * (f->height + pipeHeight);
+
+    for (int i = pipeLowerBound; i < pipeHigherBound; i++)
+    {
+        f->u[i][1] = inTakeVelocity; 
+        f->m[i][1] = 1.0f; // <--- CAMBIO 3: Asegurar que inyectamos 'materia' (color)
+    }
+
     fluid_integrate(f, delta);
     if (__DEBUG) 
         printf("Integracion completada\n");
@@ -216,40 +247,45 @@ int update(SDL_Renderer *renderer, double delta, Fluid *f)
 
 int draw(SDL_Renderer *renderer, Fluid *f)
 {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
     SDL_RenderClear(renderer);
 
-    unsigned int cell_size = CELL_SIZE;
-    SDL_Rect* rect = (SDL_Rect*)malloc(sizeof(SDL_Rect));
-    if (!rect)
-    {
-        fprintf(stderr, "Error al dibujar :c\n");
-    }
-    rect->w = cell_size;
-    rect->h = cell_size;
+    int cell_size = CELL_SIZE;
+    SDL_Rect rect;
+    rect.w = cell_size;
+    rect.h = cell_size;
 
-    Uint8 r, g, b;
+    Uint8 intensity;
+
+    // Calculate starting position to center the grid on screen
+    int start_x = (__WINDOW_W / 2) - ((f->width * cell_size) / 2);
+    int start_y = (__WINDOW_H / 2) - ((f->height * cell_size) / 2);
 
     for (int i = 1; i < f->height - 1; i++)
     {
         for (int j = 1; j < f->width - 1; j++)
         {
-            rect->x = (__WINDOW_W * .5) - (f->width * .5 - j + X_OFFSET) * cell_size;
-            rect->y = (__WINDOW_H * .5) - (f->height * .5 - i + Y_OFFSET) * cell_size;
+            // FIXED: Standard grid coordinates
+            rect.x = start_x + (j * cell_size);
+            rect.y = start_y + (i * cell_size);
 
-            r = (Uint8)(255.0f * f->m[i][j]);
-            g = (Uint8)(255.0f * f->m[i][j]);
-            b = (Uint8)(255.0f * f->m[i][j]);
+            // Clamp values to prevent weird colors
+            double val = f->m[i][j];
+            if(val > 1.0) val = 1.0;
+            if(val < 0.0) val = 0.0;
 
-            SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+            intensity = (Uint8)(255.0f * val);
 
-            if (__DEBUG)
-                printf("%.1f, ", f->m[i][j]);
+            // Draw white smoke on black bg, or blue fluid
+            SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
+            SDL_RenderFillRect(renderer, &rect);
             
-            SDL_RenderFillRect(renderer, rect);
+            // Optional: Draw Walls (Scalar = 0) as Red
+            if(f->scalar[i][j] == 0.0f) {
+                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                 SDL_RenderFillRect(renderer, &rect);
+            }
         }
-        if (__DEBUG)
-            printf("\n");
     }
 
     SDL_RenderPresent(renderer);
@@ -264,8 +300,8 @@ double sampleField(double x, double y, int field, Fluid *f)
     double samples_rec = 1.0f / samples;
     double samples_half = 0.5f * samples;
 
-    x = max(min(x, f->width * samples), samples);
-    y = max(min(y, f->height * samples), samples);
+    x = max(min(x, f->width * samples), 0.0f);
+    y = max(min(y, f->height * samples), 0.0f);
 
     double dx = 0.0f;
     double dy = 0.0f;
@@ -297,11 +333,13 @@ double sampleField(double x, double y, int field, Fluid *f)
         break;
     }
 
-    x0 = min(floor(x - dx) * samples_rec, f->width - 1);
+    //x0 = min(floor(x - dx) * samples_rec, f->width - 1);
+    x0 = max(0, min(floor(x - dx) * samples_rec, f->width - 1));
     tx = ((x - dx) - x0 * samples) * samples_rec;
     x1 = min(x0 + 1, f->width - 1);
 
-    y0 = min(floor(y - dy) * samples_rec, f->height - 1);
+    //y0 = min(floor(y - dy) * samples_rec, f->height - 1);
+    y0 = max(0, min(floor(y - dy) * samples_rec, f->height - 1));
     ty = ((y - dy) - y0 * samples) * samples_rec;
     y1 = min(y0 + 1, f->height - 1);
 
@@ -319,51 +357,60 @@ double sampleField(double x, double y, int field, Fluid *f)
 
 void fluid_advect_velocity(Fluid *f, double delta)
 {
-    delta *= .001;
+    delta *= .001; // Scale time for stability
+    
+    // Note: 'samples' logic is kept to match your original scaling style
     double samples = 100.0f;
-    double samples_rec = 1.0f / samples;
     double samples_half = 0.5f * samples;
 
     double avg, x, y;
 
-    for (int i = 1; i < f->height; i++)
+    for (int i = 1; i < f->height - 1; i++) // Bounds check -1 to stay in grid
     {
-        for (int j = 1; j < f->width; j++)
+        for (int j = 1; j < f->width - 1; j++)
         {
             f->newU[i][j] = f->u[i][j];
             f->newV[i][j] = f->v[i][j];
 
-            //update u component
-            if (f->scalar[i][j] != 0.0f && f->scalar[i][j - 1] && i < f->height - 1)
+            // Update U component
+            // Check neighbors for walls
+            if (f->scalar[i][j] != 0.0f && f->scalar[i][j - 1] != 0.0f)
             {
-                avg = (f->v[i][j - 1] + f->v[i][j + 1] + f->v[i - 1][j] + f->v[i + 1][j]) * .25;
-                f->newU[i][j] = sampleField((double)j - delta * f->u[i][j], (double)i - delta * avg, U_FIELD, f);
+                // Average V to the center of U face
+                avg = (f->v[i][j - 1] + f->v[i][j + 1] + f->v[i - 1][j] + f->v[i + 1][j]) * 0.25f;
+                
+                // FIXED: x uses j, y uses i
+                x = (double)j * samples - delta * f->u[i][j] * samples;
+                y = (double)i * samples - delta * avg * samples;
+                
+                f->newU[i][j] = sampleField(x, y, U_FIELD, f);
             }
-            //update v component
-            if (f->scalar[i][j] != 0.0f && f->scalar[i][j - 1] && i < f->height - 1)
+
+            // Update V component
+            if (f->scalar[i][j] != 0.0f && f->scalar[i - 1][j] != 0.0f)
             {
-                avg = (f->u[i][j - 1] + f->u[i][j + 1] + f->u[i - 1][j] + f->u[i + 1][j]) * .25;
-                f->newV[i][j] = sampleField((double)j - delta * avg, (double)i - delta * f->v[i][j], V_FIELD, f);
+                // Average U to the center of V face
+                avg = (f->u[i][j - 1] + f->u[i][j + 1] + f->u[i - 1][j] + f->u[i + 1][j]) * 0.25f;
+                
+                // FIXED: x uses j, y uses i
+                x = (double)j * samples - delta * avg * samples;
+                y = (double)i * samples - delta * f->v[i][j] * samples;
+                
+                f->newV[i][j] = sampleField(x, y, V_FIELD, f);
             }
         }
     }
 
+    // Swap pointers
     double** tmp;
-
-    tmp = f->v;
-    f->v = f->newV;
-    f->newV = tmp;
-
-    tmp = f->u;
-    f->u = f->newU;
-    f->newU = tmp;
+    tmp = f->v; f->v = f->newV; f->newV = tmp;
+    tmp = f->u; f->u = f->newU; f->newU = tmp;
 }
 
 void fluid_advect_smoke(Fluid *f, double delta)
 {
-    delta *= .1;
+    delta *= .1; // Scale for smoke speed
     double samples = 100.0f;
-    double samples_rec = 1.0f / samples;
     double samples_half = 0.5f * samples;
 
     double x, y, u, v;
@@ -372,6 +419,7 @@ void fluid_advect_smoke(Fluid *f, double delta)
     {
         for (int j = 1; j < f->width - 1; j++)
         {
+            // Default to fading old value slightly or keeping it
             f->newM[i][j] = f->m[i][j];
             
             if (f->scalar[i][j] != 0.0)
@@ -379,8 +427,10 @@ void fluid_advect_smoke(Fluid *f, double delta)
                 u = (f->u[i][j] + f->u[i][j + 1]) * 0.5f;
                 v = (f->v[i][j] + f->v[i + 1][j]) * 0.5f;
 
-                x = i * samples + samples_half - delta * u;
-                y = j * samples + samples_half - delta * v;
+                // FIXED: x comes from j (width), y comes from i (height)
+                // We backtrace: position - velocity * time
+                x = j * samples + samples_half - delta * u * samples;
+                y = i * samples + samples_half - delta * v * samples;
 
                 f->newM[i][j] = sampleField(x, y, S_FIELD, f);
             }
