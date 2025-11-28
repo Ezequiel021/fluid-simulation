@@ -1,6 +1,6 @@
 #include "utils.h"
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     int show_fps = 0, debug = 0;
     if (argc > 1 && !strcmp(argv[1], "--fps"))
@@ -64,7 +64,8 @@ int main(int argc, char** argv)
             {
             case SDL_SCANCODE_P:
                 isPaused = !isPaused;
-                if (!show_fps) printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
+                if (!show_fps)
+                    printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
                 break;
             case SDL_SCANCODE_M:
                 step = 1;

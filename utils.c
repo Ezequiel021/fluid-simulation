@@ -38,12 +38,9 @@ int fluid_setup(Fluid *f)
         return 1;
     }
 
-    double gravity, intake;
-    fscanf(config, "%lf", &gravity);
-    fscanf(config, "%lf", &intake);
+    fscanf(config, "%lf", &f->gravity);
+    fscanf(config, "%lf", &f->intake_speed);
     fclose(config);
-    f->gravity = gravity;
-    f->intake_speed = intake;
     printf("Gravity = %f\nIntake Velocity = %f\n", f->gravity, f->intake_speed);
 
     if (__DEBUG)
@@ -199,10 +196,13 @@ int simulate(Fluid* f, double delta)
     int pipeLowerBound = 0.5f * (f->height - pipeHeight);
     int pipeHigherBound = 0.5f * (f->height + pipeHeight);
 
-    for (int i = pipeLowerBound; i < pipeHigherBound; i++)
+    for (int col = 1; col <= 4; col++) 
     {
-        f->u[i][1] = inTakeVelocity; 
-        f->m[i][1] = 1.0f; // <--- CAMBIO 3: Asegurar que inyectamos 'materia' (color)
+        for (int i = pipeLowerBound; i < pipeHigherBound; i++)
+        {
+            f->u[i][col] = inTakeVelocity; 
+            f->m[i][col] = 1.0f; 
+        }
     }
 
     fluid_integrate(f, delta);
@@ -277,7 +277,7 @@ int draw(SDL_Renderer *renderer, Fluid *f)
             intensity = (Uint8)(255.0f * val);
 
             // Draw white smoke on black bg, or blue fluid
-            SDL_SetRenderDrawColor(renderer, intensity, intensity, intensity, 255);
+            SDL_SetRenderDrawColor(renderer, 0, intensity, 0, 255);
             SDL_RenderFillRect(renderer, &rect);
             
             // Optional: Draw Walls (Scalar = 0) as Red
