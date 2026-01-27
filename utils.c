@@ -1,31 +1,15 @@
 #include "utils.h"
 
-int new_double2D(double ***array, Uint32 rows, Uint32 cols)
-{
-    double **res = (double**)malloc(sizeof(double*) * rows);
-    if (!res)
-    {
-        fprintf(stderr, "Error al alojar memoria para la simulacion\n");
-        return 0;
+int new_double2D(double ***array, Uint32 rows, Uint32 cols) {
+    double **ptrs = (double**)malloc(sizeof(double*) * rows);
+    double *data = (double*)malloc(sizeof(double) * rows * cols);
+
+    if (!ptrs || !data) return 0;
+    for (int i = 0; i < rows; i++) {
+        ptrs[i] = &data[i * cols]; 
     }
 
-    for (int i = 0; i < rows; i++)
-    {
-        res[i] = (double*)malloc(sizeof(double) * cols);
-        if (!res[i])
-        {
-            fprintf(stderr, "Error al alojar memoria para la simulacion\n");
-            for (int j = 0; j < i; j++)
-            {
-                free(res[j]);
-            }
-            free(res);
-            return 0;
-        }
-    }
-
-    *array = res;
-
+    *array = ptrs;
     return 1;
 }
 
@@ -141,12 +125,10 @@ void fluid_solveIncompressibility(Fluid* f, double deltaTime)
     {
         for (int j = 1; j < f->width - 1; j++)
         {            
-            if (s == 0.0f)
-                continue;
-            
             // account for obstacles
             s = f->scalar[i + 1][j] + f->scalar[i - 1][j] + f->scalar[i][j + 1] + f->scalar[i][j - 1];
-
+            if (s == 0.0f) continue;
+            
             // calculate divergence
             divergence = f->v[i + 1][j] - f->v[i][j] + f->u[i][j + 1] - f->u[i][j];
             divergence = (-divergence) / s;
@@ -287,7 +269,7 @@ int draw(SDL_Renderer *renderer, Fluid *f)
             }
         }
     }
-    
+
     return 0;
 }
 

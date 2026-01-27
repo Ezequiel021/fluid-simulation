@@ -118,6 +118,11 @@ int main(int argc, char **argv)
         }
     }
 
+    free(fluid.u[0]);
+    free(fluid.u);
+    free(fluid.v[0]);
+    free(fluid.v);
+
     printf("\n");
     TTF_Quit();
     SDL_Quit();
