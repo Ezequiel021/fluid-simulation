@@ -287,8 +287,7 @@ int draw(SDL_Renderer *renderer, Fluid *f)
             }
         }
     }
-
-    SDL_RenderPresent(renderer);
+    
     return 0;
 }
 

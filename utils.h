@@ -1,6 +1,9 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <math.h>
 #include <stdio.h>
+#include <omp.h>
+#include <string.h>
 
 #define __DEBUG 0
 #define __SHOW_FPS 0

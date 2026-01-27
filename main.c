@@ -1,5 +1,20 @@
 #include "utils.h"
 
+int draw_fps(SDL_Renderer* renderer, TTF_Font* font, float fps)
+{
+    char str[] = "FPS: 0000.0";
+    sprintf(str, "FPS: %.1f", fps);
+
+    SDL_Color color = {255, 255, 255, 255};
+    SDL_Surface *surface = TTF_RenderText_Blended(font, str, color);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    SDL_Rect label = {0, 0, surface->w, surface->h};
+    SDL_RenderCopy(renderer, texture, NULL, &label);
+
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     int show_fps = 0, debug = 0;
@@ -16,6 +31,7 @@ int main(int argc, char **argv)
     SDL_Renderer *renderer = NULL;
 
     SDL_Init(SDL_INIT_VIDEO);
+    TTF_Init();
     SDL_CreateWindowAndRenderer(__WINDOW_W, __WINDOW_H, 0, &window, &renderer);
     SDL_RenderSetScale(renderer, __RENDER_SCALE, __RENDER_SCALE);
 
@@ -48,6 +64,8 @@ int main(int argc, char **argv)
     if (__DEBUG)
         printf("Deltatime iniciado con exito!\n");
 
+    TTF_Font *font = TTF_OpenFont("roboto.ttf", 24);
+
     while (isRunning)
     {
         LAST = NOW;
@@ -55,6 +73,7 @@ int main(int argc, char **argv)
         deltaTime = (double)((NOW - LAST) * 1000 / (double)SDL_GetPerformanceFrequency());
         if (show_fps)
             printf("%f - %.1f fps   \r", deltaTime, 1000.0f / deltaTime);
+
 
         SDL_PollEvent(&eventHandler);
         switch (eventHandler.type)
@@ -87,6 +106,8 @@ int main(int argc, char **argv)
         if (!isPaused)
         {
             update(renderer, deltaTime, &fluid);
+            draw_fps(renderer, font, 1000.0f / deltaTime);
+            SDL_RenderPresent(renderer);
         }
         else if (step)
         {
@@ -98,6 +119,7 @@ int main(int argc, char **argv)
     }
 
     printf("\n");
+    TTF_Quit();
     SDL_Quit();
 
     return 0;
