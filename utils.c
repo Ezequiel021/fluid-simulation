@@ -121,6 +121,7 @@ void fluid_solveIncompressibility(Fluid* f, double deltaTime)
 {
     double divergence, s;
 
+    #pragma omp parallel for
     for (int i = 1; i < f->height - 1; i++)
     {
         for (int j = 1; j < f->width - 1; j++)

@@ -118,10 +118,20 @@ int main(int argc, char **argv)
         }
     }
 
-    free(fluid.u[0]);
-    free(fluid.u);
+    // Free U
+    free(fluid.u[0]); // Free the data block
+    free(fluid.u);    // Free the row pointers
+
+    // Free V
     free(fluid.v[0]);
     free(fluid.v);
+
+    // ... You must also free these: ...
+    free(fluid.newU[0]); free(fluid.newU);
+    free(fluid.newV[0]); free(fluid.newV);
+    free(fluid.m[0]);    free(fluid.m);
+    free(fluid.newM[0]); free(fluid.newM);
+    free(fluid.scalar[0]); free(fluid.scalar);
 
     printf("\n");
     TTF_Quit();
