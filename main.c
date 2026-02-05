@@ -10,25 +10,21 @@ int draw_fps(SDL_Renderer* renderer, TTF_Font* font, float fps)
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
     SDL_Rect label = {0, 0, surface->w, surface->h};
-    SDL_RenderCopy(renderer, texture, NULL, &label);
+    SDL_RenderCopy(renderer, texture, nullptr, &label);
 
     return 1;
 }
 
 int main(int argc, char **argv)
 {
-    int show_fps = 0, debug = 0;
+    int show_fps = 0;
     if (argc > 1 && !strcmp(argv[1], "--fps"))
     {
         show_fps = 1;
     }
-    if (argc > 1 && !strcmp(argv[1], "--debug"))
-    {
-        debug = 1;
-    }
 
-    SDL_Window *window = NULL;
-    SDL_Renderer *renderer = NULL;
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
 
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
@@ -50,21 +46,19 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error al crear la malla. (L24)\n");
         SDL_Quit();
     }
-    if (__DEBUG)
-        printf("Generacion de malla basica, Completada!\n");
 
     int isRunning = 1;
     int isPaused = 0;
-    int step = 1;
-
     unsigned long NOW = SDL_GetPerformanceCounter();
     Uint64 LAST = 0;
     double deltaTime = 0;
 
-    if (__DEBUG)
-        printf("Deltatime iniciado con exito!\n");
-
     TTF_Font *font = TTF_OpenFont("roboto.ttf", 24);
+
+    SDL_Texture *target = nullptr;
+    SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, fluid.width, fluid.height);
+
+    Uint32 *pixels = (Uint32 *) malloc(sizeof(Uint32) * fluid.width * fluid.height);
 
     while (isRunning)
     {
@@ -75,47 +69,37 @@ int main(int argc, char **argv)
             printf("%f - %.1f fps   \r", deltaTime, 1000.0f / deltaTime);
 
 
-        SDL_PollEvent(&eventHandler);
-        switch (eventHandler.type)
-        {
-        case (SDL_KEYUP):
-            switch (eventHandler.key.keysym.scancode)
+        while (SDL_PollEvent(&eventHandler)) {
+            switch (eventHandler.type)
             {
-            case SDL_SCANCODE_P:
-                isPaused = !isPaused;
-                if (!show_fps)
-                    printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
-                break;
-            case SDL_SCANCODE_M:
-                step = 1;
-                break;
-            case SDL_SCANCODE_Q:
-                isRunning = 0;
-            default:
-                break;
+                case (SDL_KEYUP):
+                    switch (eventHandler.key.keysym.scancode)
+                    {
+                    case SDL_SCANCODE_P:
+                            isPaused = !isPaused;
+                            if (!show_fps)
+                                printf("%s\n", isPaused ? "Pausa" : "Reanudando...");
+                            break;
+                    case SDL_SCANCODE_Q:
+                            isRunning = 0;
+                    default:
+                            break;
+                    }
+                    break;
+
+                case (SDL_QUIT):
+                    isRunning = 0;
+                    break;
+                default:
+                    break;
             }
-            break;
-
-        case (SDL_QUIT):
-            isRunning = 0;
-            break;
-        default:
-            break;
         }
 
-        if (!isPaused)
-        {
-            update(renderer, deltaTime, &fluid);
-            draw_fps(renderer, font, 1000.0f / deltaTime);
-            SDL_RenderPresent(renderer);
-        }
-        else if (step)
-        {
-            update(renderer, deltaTime, &fluid);
-            if (!show_fps)printf("Avanzando un paso\n");
-            isPaused = 1;
-            step = 0;
-        }
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+        update(renderer, deltaTime, &fluid, target, pixels);
+        draw_fps(renderer, font, 1000.0 / deltaTime);
+        SDL_RenderPresent(renderer);
     }
 
     // Free U
@@ -132,6 +116,8 @@ int main(int argc, char **argv)
     free(fluid.m[0]);    free(fluid.m);
     free(fluid.newM[0]); free(fluid.newM);
     free(fluid.scalar[0]); free(fluid.scalar);
+
+    SDL_DestroyTexture(target);
 
     printf("\n");
     TTF_Quit();

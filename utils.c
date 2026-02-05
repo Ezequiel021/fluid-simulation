@@ -27,9 +27,6 @@ int fluid_setup(Fluid *f)
     fclose(config);
     printf("Gravity = %f\nIntake Velocity = %f\n", f->gravity, f->intake_speed);
 
-    if (__DEBUG)
-        printf("Inicializando simulacion\n");
-
     if (!new_double2D(&f->u, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para los componentes horizontales\n");
@@ -72,9 +69,6 @@ int fluid_setup(Fluid *f)
         return 1;
     }
 
-    if (__DEBUG)
-        printf("Memoria asignada con exito\n");
-
     // En utils.c -> fluid_setup
     double inTakeVelocity = 1.0f;
     for (int i = 0; i < f->height; i++)
@@ -96,10 +90,6 @@ int fluid_setup(Fluid *f)
                 f->u[i][j] = inTakeVelocity;
         }
     }
-
-    if (__DEBUG)
-        printf("Inicializacion completada\n");
-
     return 0;
 }
 
@@ -121,7 +111,6 @@ void fluid_solveIncompressibility(Fluid* f, double deltaTime)
 {
     double divergence, s;
 
-    #pragma omp parallel for
     for (int i = 1; i < f->height - 1; i++)
     {
         for (int j = 1; j < f->width - 1; j++)
@@ -189,95 +178,56 @@ int simulate(Fluid* f, double delta)
     }
 
     fluid_integrate(f, delta);
-    if (__DEBUG) 
-        printf("Integracion completada\n");
-
     for (int i = 0; i < 100; i++)
         fluid_solveIncompressibility(f, delta);
-    if (__DEBUG) 
-        printf("Proyeccion completada\n");
 
     fluid_extrapolate(f);
-    if (__DEBUG) 
-        printf("Extrapolacion completada\n");
-
     fluid_advect_velocity(f, delta);
-    if (__DEBUG) 
-        printf("Adveccion de la velocidad completada\n");
 
     fluid_advect_smoke(f, delta);
-    if (__DEBUG) 
-        printf("Adveccion del humo completada\n");
 
     return 0;
 }
 
-int update(SDL_Renderer *renderer, double delta, Fluid *f)
+int update(SDL_Renderer *renderer, double delta, Fluid *f, SDL_Texture *target, Uint32 *pixels)
 {
-    if (__DEBUG)
-        printf("Dibujando malla!\n");
-    draw(renderer, f);
+    draw(renderer, f, target, pixels);
 
-    if (__DEBUG)
-        printf("Iniciando simulacion!\n");
     simulate(f, delta);
-
-    if (__DEBUG)
-        printf("Actualizacion completa!\n");
 
     return 1;
 }
 
-int draw(SDL_Renderer *renderer, Fluid *f)
+int draw(SDL_Renderer *renderer, Fluid *f, SDL_Texture *target, Uint32 *pixels)
 {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
-    SDL_RenderClear(renderer);
+    SDL_Rect rect = {0, 0, f->width, f->height};
 
-    int cell_size = CELL_SIZE;
-    SDL_Rect rect;
-    rect.w = cell_size;
-    rect.h = cell_size;
-
-    Uint8 intensity;
-
-    // Calculate starting position to center the grid on screen
-    int start_x = (__WINDOW_W / 2) - ((f->width * cell_size) / 2);
-    int start_y = (__WINDOW_H / 2) - ((f->height * cell_size) / 2);
-
+    Uint8 r, g, b, a;
+    #pragma omp parallel for private(r, g, b, a)
     for (int i = 1; i < f->height - 1; i++)
     {
         for (int j = 1; j < f->width - 1; j++)
         {
-            // FIXED: Standard grid coordinates
-            rect.x = start_x + (j * cell_size);
-            rect.y = start_y + (i * cell_size);
-
-            // Clamp values to prevent weird colors
             double val = f->m[i][j];
             if(val > 1.0) val = 1.0;
             if(val < 0.0) val = 0.0;
 
-            intensity = (Uint8)(255.0f * val);
-
-            // Draw white smoke on black bg, or blue fluid
-            SDL_SetRenderDrawColor(renderer, 0, intensity, 0, 255);
-            SDL_RenderFillRect(renderer, &rect);
-            
-            // Optional: Draw Walls (Scalar = 0) as Red
-            if(f->scalar[i][j] == 0.0f) {
-                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-                 SDL_RenderFillRect(renderer, &rect);
-            }
+            r = 0;
+            g = (Uint8)(255.0f * val);
+            b = 0;
+            a = 255;
+            pixels[i * f->width + j] = (r << 24) | (g << 16) | (b << 8) | a;
         }
     }
+
+    SDL_UpdateTexture(target, NULL, pixels, f->width * sizeof(Uint32));
+    SDL_RenderCopy(renderer, target, NULL, &rect);
 
     return 0;
 }
 
 double sampleField(double x, double y, int field, Fluid *f)
 {
-    double result;
-
     double samples = 100.0f;
     double samples_rec = 1.0f / samples;
     double samples_half = 0.5f * samples;
@@ -289,7 +239,7 @@ double sampleField(double x, double y, int field, Fluid *f)
     double dy = 0.0f;
 
     int x0, x1, y0, y1;
-    double tx, ty, sx, sy;
+    double tx;
 
     double** d;
 
@@ -312,6 +262,7 @@ double sampleField(double x, double y, int field, Fluid *f)
         break;
 
     default:
+        d = f->m;
         break;
     }
 
@@ -322,16 +273,16 @@ double sampleField(double x, double y, int field, Fluid *f)
 
     //y0 = min(floor(y - dy) * samples_rec, f->height - 1);
     y0 = max(0, min(floor(y - dy) * samples_rec, f->height - 1));
-    ty = ((y - dy) - y0 * samples) * samples_rec;
+    double ty = ((y - dy) - y0 * samples) * samples_rec;
     y1 = min(y0 + 1, f->height - 1);
 
-    sx = 1.0f - tx;
-    sy = 1.0f - ty;
+    double sx = 1.0f - tx;
+    double sy = 1.0f - ty;
 
-    result = sx * sy * d[y0][x0] + 
-             tx * sy * d[y0][x1] + 
-             tx * ty * d[y1][x1] + 
-             sx * ty * d[y1][x0];
+    double result = sx * sy * d[y0][x0] +
+                    tx * sy * d[y0][x1] +
+                    tx * ty * d[y1][x1] +
+                    sx * ty * d[y1][x0];
                  
     return result;
 }
@@ -343,7 +294,6 @@ void fluid_advect_velocity(Fluid *f, double delta)
     
     // Note: 'samples' logic is kept to match your original scaling style
     double samples = 100.0f;
-    double samples_half = 0.5f * samples;
 
     double avg, x, y;
 

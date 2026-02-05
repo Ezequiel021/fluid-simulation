@@ -1,3 +1,5 @@
+#ifndef UTILS_H
+#define UTILS_H
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <math.h>
@@ -76,12 +78,13 @@ void fluid_extrapolate(Fluid* f);
 
 int simulate(Fluid* f, double delta);
 
-int update(SDL_Renderer* renderer, double delta, Fluid* f);
+int update(SDL_Renderer* renderer, double delta, Fluid* f, SDL_Texture *target, Uint32 *pixels);
 
-int draw(SDL_Renderer* renderer, Fluid* f);
+int draw(SDL_Renderer* renderer, Fluid* f, SDL_Texture *target, Uint32 *pixels);
 
 double sampleField(double x, double y, int field, Fluid *f);
 
 void fluid_advect_velocity(Fluid* f, double delta);
 
 void fluid_advect_smoke(Fluid* f, double delta);
+#endif // UTILS_H
