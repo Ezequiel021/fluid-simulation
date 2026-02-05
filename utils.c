@@ -22,9 +22,15 @@ int fluid_setup(Fluid *f)
         return 1;
     }
 
-    fscanf(config, "%lf", &f->gravity);
-    fscanf(config, "%lf", &f->intake_speed);
+    // Read configurations from file
+    char buffer[128];
+    char *endptr;
+    fscanf(config, "%s", buffer);
+    f->gravity = strtof(buffer, &endptr);
+    fscanf(config, "%s", buffer);
+    f->intake_speed = strtof(buffer, &endptr);
     fclose(config);
+
     printf("Gravity = %f\nIntake Velocity = %f\n", f->gravity, f->intake_speed);
 
     if (!new_float2D(&f->u, f->height, f->width))
@@ -69,8 +75,6 @@ int fluid_setup(Fluid *f)
         return 1;
     }
 
-    // En utils.c -> fluid_setup
-    float inTakeVelocity = 1.0f;
     for (int i = 0; i < f->height; i++)
     {
         for (int j = 0; j < f->width; j++)
@@ -79,15 +83,19 @@ int fluid_setup(Fluid *f)
             f->v[i][j] = 0.0f;
             f->m[i][j] = 0.0f; // <--- CAMBIO 1: Fondo negro (vacío) en lugar de 1.0
 
-            // CAMBIO 2: Agregamos la pared DERECHA (j == f->width - 1) que faltaba
-            if (j == 0 || j == f->width - 1 || i == 0 || i == f->height - 1)
+            // Change the boundary condition to keep the Right Wall (j == f->width - 1) open
+            if (j == 0 || i == 0 || i == f->height - 1) // Removed "j == f->width - 1"
                 f->scalar[i][j] = 0.0f;
+
+            else if ((sqrtf(powf(0.25f * f->width - j, 2) + powf(0.5f * f->height - i , 2)) <= 10.0f) && 1) {
+                f->scalar[i][j] = 0.0f;
+            }
             else
                 f->scalar[i][j] = 1.0f;
-            
+
             // Inyectamos velocidad inicial
             if (j == 1)
-                f->u[i][j] = inTakeVelocity;
+                f->u[i][j] = f->intake_speed;
         }
     }
     return 0;
@@ -142,11 +150,8 @@ void fluid_extrapolate(Fluid *f)
     for (int i = 0; i < f->height; i++)
     {
         // En lugar de copiar ( f->v[i][1] ), forzamos 0
-        f->v[i][0] = 0.0f; 
-        f->v[i][f->width - 1] = 0.0f;
-        
+        f->v[i][0] = f->v[i][1];
         f->u[i][0] = 0.0f;
-        f->u[i][f->width - 1] = 0.0f;
     }
 
     // Límite Superior e Inferior
@@ -168,7 +173,7 @@ int simulate(Fluid* f, float delta)
     int pipeLowerBound = 0.5f * (f->height - pipeHeight);
     int pipeHigherBound = 0.5f * (f->height + pipeHeight);
 
-    for (int col = 1; col <= 4; col++) 
+    for (int col = 0; col <= 4; col++)
     {
         for (int i = pipeLowerBound; i < pipeHigherBound; i++)
         {
@@ -178,7 +183,7 @@ int simulate(Fluid* f, float delta)
     }
 
     fluid_integrate(f, delta);
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < 30; i++)
         fluid_solveIncompressibility(f, delta);
 
     fluid_extrapolate(f);
@@ -208,15 +213,25 @@ int draw(SDL_Renderer *renderer, Fluid *f, SDL_Texture *target, Uint32 *pixels)
     {
         for (int j = 0; j < f->width; j++)
         {
-            float val = f->m[i][j];
-            if(val > 1.0) val = 1.0;
-            if(val < 0.0) val = 0.0;
+            if (fabsf(f->scalar[i][j]) <= 0.01f)
+            {
+                r = 255;
+                g = 0;
+                b = 0;
+                a = 255;
+            }
+            else
+            {
+                float val = f->m[i][j];
+                if(val > 1.0) val = 1.0f;
+                if(val < 0.0) val = 0.0f;
 
-            r = 0;
-            //g = (i + j) % 2 ? 255 : 0;
-            g = (Uint8)(255.0f * val);
-            b = 0;
-            a = 255;
+                r = (Uint8)(255.0f * val);
+                //g = (i + j) % 2 ? 255 : 0;
+                g = r;
+                b = r;
+                a = 255;
+            }
             pixels[i * f->width + j] = (r << 24) | (g << 16) | (b << 8) | a;
         }
     }
@@ -240,7 +255,6 @@ float sampleField(float x, float y, int field, Fluid *f)
     float dy = 0.0f;
 
     int x0, x1, y0, y1;
-    float tx;
 
     float** d;
 
@@ -269,7 +283,7 @@ float sampleField(float x, float y, int field, Fluid *f)
 
     //x0 = min(floor(x - dx) * samples_rec, f->width - 1);
     x0 = max(0, min(floor(x - dx) * samples_rec, f->width - 1));
-    tx = ((x - dx) - x0 * samples) * samples_rec;
+    float tx = ((x - dx) - x0 * samples) * samples_rec;
     x1 = min(x0 + 1, f->width - 1);
 
     //y0 = min(floor(y - dy) * samples_rec, f->height - 1);
@@ -291,10 +305,11 @@ float sampleField(float x, float y, int field, Fluid *f)
 
 void fluid_advect_velocity(Fluid *f, float delta)
 {
-    delta *= .001; // Scale time for stability
+    delta *= 0.001f; // Scale time for stability
     
     // Note: 'samples' logic is kept to match your original scaling style
-    float samples = 100.0f;
+    constexpr float samples = 100.0f;
+    constexpr float samples_half = 0.5f * samples;
 
     float avg, x, y;
 
@@ -315,8 +330,8 @@ void fluid_advect_velocity(Fluid *f, float delta)
                 
                 // FIXED: x uses j, y uses i
                 x = (float)j * samples - delta * f->u[i][j] * samples;
-                y = (float)i * samples - delta * avg * samples;
-                
+                y = (float)i * samples + samples_half - delta * avg * samples; // <--- ADDED + samples_half
+
                 f->newU[i][j] = sampleField(x, y, U_FIELD, f);
             }
 
@@ -327,9 +342,9 @@ void fluid_advect_velocity(Fluid *f, float delta)
                 avg = (f->u[i][j - 1] + f->u[i][j + 1] + f->u[i - 1][j] + f->u[i + 1][j]) * 0.25f;
                 
                 // FIXED: x uses j, y uses i
-                x = (float)j * samples - delta * avg * samples;
+                x = (float)j * samples + samples_half - delta * avg * samples; // <--- ADDED + samples_half
                 y = (float)i * samples - delta * f->v[i][j] * samples;
-                
+
                 f->newV[i][j] = sampleField(x, y, V_FIELD, f);
             }
         }
@@ -343,7 +358,7 @@ void fluid_advect_velocity(Fluid *f, float delta)
 
 void fluid_advect_smoke(Fluid *f, float delta)
 {
-    delta *= .1; // Scale for smoke speed
+    delta *= 0.1f; // Scale for smoke speed
     float samples = 100.0f;
     float samples_half = 0.5f * samples;
 

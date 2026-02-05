@@ -10,8 +10,8 @@
 #define __DEBUG 0
 #define __SHOW_FPS 0
 
-#define WINDOW_W (640 * 2)
-#define WINDOW_H (480 * 2)
+#define WINDOW_W (1000)
+#define WINDOW_H (450)
 #define __RENDER_SCALE 1.0f
 #define FRAMETIME 66
 
@@ -22,7 +22,7 @@
 #define X_OFFSET 1
 #define Y_OFFSET 0
 
-#define GRID_WIDTH 160
+#define GRID_WIDTH 200
 #define GRID_HEIGHT 90
 
 #define GRAVITY 10.0f
