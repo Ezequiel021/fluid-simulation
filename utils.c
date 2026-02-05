@@ -1,8 +1,8 @@
 #include "utils.h"
 
-int new_double2D(double ***array, Uint32 rows, Uint32 cols) {
-    double **ptrs = (double**)malloc(sizeof(double*) * rows);
-    double *data = (double*)malloc(sizeof(double) * rows * cols);
+int new_float2D(float ***array, Uint32 rows, Uint32 cols) {
+    float **ptrs = (float**)malloc(sizeof(float*) * rows);
+    float *data = (float*)malloc(sizeof(float) * rows * cols);
 
     if (!ptrs || !data) return 0;
     for (int i = 0; i < rows; i++) {
@@ -27,50 +27,50 @@ int fluid_setup(Fluid *f)
     fclose(config);
     printf("Gravity = %f\nIntake Velocity = %f\n", f->gravity, f->intake_speed);
 
-    if (!new_double2D(&f->u, f->height, f->width))
+    if (!new_float2D(&f->u, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para los componentes horizontales\n");
         return 1;
     }
 
-    if (!new_double2D(&f->v, f->height, f->width))
+    if (!new_float2D(&f->v, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para los componentes verticales\n");
         return 1;
     }
 
-    if (!new_double2D(&f->newU, f->height, f->width))
+    if (!new_float2D(&f->newU, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para el buffer de componentes horizontales\n");
         return 1;
     }
 
-    if (!new_double2D(&f->newV, f->height, f->width))
+    if (!new_float2D(&f->newV, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para el buffer de componentes verticales\n");
         return 1;
     }
 
-    if (!new_double2D(&f->m, f->height, f->width))
+    if (!new_float2D(&f->m, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para la intensidad de los colores\n");
         return 1;
     }
 
-    if (!new_double2D(&f->newM, f->height, f->width))
+    if (!new_float2D(&f->newM, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para el buffer de intensidad del color\n");
         return 1;
     }
 
-    if (!new_double2D(&f->scalar, f->height, f->width))
+    if (!new_float2D(&f->scalar, f->height, f->width))
     {
         fprintf(stderr, "Error al asignar memoria para los coeficientes escalares\n");
         return 1;
     }
 
     // En utils.c -> fluid_setup
-    double inTakeVelocity = 1.0f;
+    float inTakeVelocity = 1.0f;
     for (int i = 0; i < f->height; i++)
     {
         for (int j = 0; j < f->width; j++)
@@ -93,7 +93,7 @@ int fluid_setup(Fluid *f)
     return 0;
 }
 
-void fluid_integrate(Fluid *f, double deltaTime)
+void fluid_integrate(Fluid *f, float deltaTime)
 {
     for (int i = 1; i < f->height - 1; i++)
     {
@@ -107,9 +107,9 @@ void fluid_integrate(Fluid *f, double deltaTime)
     }
 }
 
-void fluid_solveIncompressibility(Fluid* f, double deltaTime)
+void fluid_solveIncompressibility(Fluid* f, float deltaTime)
 {
-    double divergence, s;
+    float s;
 
     for (int i = 1; i < f->height - 1; i++)
     {
@@ -120,7 +120,7 @@ void fluid_solveIncompressibility(Fluid* f, double deltaTime)
             if (s == 0.0f) continue;
             
             // calculate divergence
-            divergence = f->v[i + 1][j] - f->v[i][j] + f->u[i][j + 1] - f->u[i][j];
+            float divergence = f->v[i + 1][j] - f->v[i][j] + f->u[i][j + 1] - f->u[i][j];
             divergence = (-divergence) / s;
 
             // overrelaxation-divergence
@@ -160,10 +160,10 @@ void fluid_extrapolate(Fluid *f)
     }
 }
 
-int simulate(Fluid* f, double delta)
+int simulate(Fluid* f, float delta)
 {
     // --- NUEVO CÓDIGO: REFORZAR LA ENTRADA CONSTANTE ---
-    double inTakeVelocity = f->intake_speed; // Velocidad deseada
+    float inTakeVelocity = f->intake_speed; // Velocidad deseada
     int pipeHeight = 0.2f * f->height;
     int pipeLowerBound = 0.5f * (f->height - pipeHeight);
     int pipeHigherBound = 0.5f * (f->height + pipeHeight);
@@ -178,7 +178,7 @@ int simulate(Fluid* f, double delta)
     }
 
     fluid_integrate(f, delta);
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 20; i++)
         fluid_solveIncompressibility(f, delta);
 
     fluid_extrapolate(f);
@@ -189,7 +189,7 @@ int simulate(Fluid* f, double delta)
     return 0;
 }
 
-int update(SDL_Renderer *renderer, double delta, Fluid *f, SDL_Texture *target, Uint32 *pixels)
+int update(SDL_Renderer *renderer, float delta, Fluid *f, SDL_Texture *target, Uint32 *pixels)
 {
     draw(renderer, f, target, pixels);
 
@@ -200,19 +200,20 @@ int update(SDL_Renderer *renderer, double delta, Fluid *f, SDL_Texture *target, 
 
 int draw(SDL_Renderer *renderer, Fluid *f, SDL_Texture *target, Uint32 *pixels)
 {
-    SDL_Rect rect = {0, 0, f->width, f->height};
+    SDL_Rect rect = {0, 0, WINDOW_W, WINDOW_H};
 
     Uint8 r, g, b, a;
-    #pragma omp parallel for private(r, g, b, a)
-    for (int i = 1; i < f->height - 1; i++)
+    #pragma omp parallel for private(r, g, b, a) collapse(2)
+    for (int i = 0; i < f->height; i++)
     {
-        for (int j = 1; j < f->width - 1; j++)
+        for (int j = 0; j < f->width; j++)
         {
-            double val = f->m[i][j];
+            float val = f->m[i][j];
             if(val > 1.0) val = 1.0;
             if(val < 0.0) val = 0.0;
 
             r = 0;
+            //g = (i + j) % 2 ? 255 : 0;
             g = (Uint8)(255.0f * val);
             b = 0;
             a = 255;
@@ -220,28 +221,28 @@ int draw(SDL_Renderer *renderer, Fluid *f, SDL_Texture *target, Uint32 *pixels)
         }
     }
 
-    SDL_UpdateTexture(target, NULL, pixels, f->width * sizeof(Uint32));
-    SDL_RenderCopy(renderer, target, NULL, &rect);
+    SDL_UpdateTexture(target, nullptr, pixels, f->width * sizeof(Uint32));
+    SDL_RenderCopy(renderer, target, nullptr, &rect);
 
     return 0;
 }
 
-double sampleField(double x, double y, int field, Fluid *f)
+float sampleField(float x, float y, int field, Fluid *f)
 {
-    double samples = 100.0f;
-    double samples_rec = 1.0f / samples;
-    double samples_half = 0.5f * samples;
+    float samples = 100.0f;
+    float samples_rec = 1.0f / samples;
+    float samples_half = 0.5f * samples;
 
     x = max(min(x, f->width * samples), 0.0f);
     y = max(min(y, f->height * samples), 0.0f);
 
-    double dx = 0.0f;
-    double dy = 0.0f;
+    float dx = 0.0f;
+    float dy = 0.0f;
 
     int x0, x1, y0, y1;
-    double tx;
+    float tx;
 
-    double** d;
+    float** d;
 
     switch (field)
     {
@@ -273,13 +274,13 @@ double sampleField(double x, double y, int field, Fluid *f)
 
     //y0 = min(floor(y - dy) * samples_rec, f->height - 1);
     y0 = max(0, min(floor(y - dy) * samples_rec, f->height - 1));
-    double ty = ((y - dy) - y0 * samples) * samples_rec;
+    float ty = ((y - dy) - y0 * samples) * samples_rec;
     y1 = min(y0 + 1, f->height - 1);
 
-    double sx = 1.0f - tx;
-    double sy = 1.0f - ty;
+    float sx = 1.0f - tx;
+    float sy = 1.0f - ty;
 
-    double result = sx * sy * d[y0][x0] +
+    float result = sx * sy * d[y0][x0] +
                     tx * sy * d[y0][x1] +
                     tx * ty * d[y1][x1] +
                     sx * ty * d[y1][x0];
@@ -288,15 +289,16 @@ double sampleField(double x, double y, int field, Fluid *f)
 }
 
 
-void fluid_advect_velocity(Fluid *f, double delta)
+void fluid_advect_velocity(Fluid *f, float delta)
 {
     delta *= .001; // Scale time for stability
     
     // Note: 'samples' logic is kept to match your original scaling style
-    double samples = 100.0f;
+    float samples = 100.0f;
 
-    double avg, x, y;
+    float avg, x, y;
 
+    #pragma omp parallel for private(x, y, avg) collapse(2)
     for (int i = 1; i < f->height - 1; i++) // Bounds check -1 to stay in grid
     {
         for (int j = 1; j < f->width - 1; j++)
@@ -312,8 +314,8 @@ void fluid_advect_velocity(Fluid *f, double delta)
                 avg = (f->v[i][j - 1] + f->v[i][j + 1] + f->v[i - 1][j] + f->v[i + 1][j]) * 0.25f;
                 
                 // FIXED: x uses j, y uses i
-                x = (double)j * samples - delta * f->u[i][j] * samples;
-                y = (double)i * samples - delta * avg * samples;
+                x = (float)j * samples - delta * f->u[i][j] * samples;
+                y = (float)i * samples - delta * avg * samples;
                 
                 f->newU[i][j] = sampleField(x, y, U_FIELD, f);
             }
@@ -325,8 +327,8 @@ void fluid_advect_velocity(Fluid *f, double delta)
                 avg = (f->u[i][j - 1] + f->u[i][j + 1] + f->u[i - 1][j] + f->u[i + 1][j]) * 0.25f;
                 
                 // FIXED: x uses j, y uses i
-                x = (double)j * samples - delta * avg * samples;
-                y = (double)i * samples - delta * f->v[i][j] * samples;
+                x = (float)j * samples - delta * avg * samples;
+                y = (float)i * samples - delta * f->v[i][j] * samples;
                 
                 f->newV[i][j] = sampleField(x, y, V_FIELD, f);
             }
@@ -334,18 +336,18 @@ void fluid_advect_velocity(Fluid *f, double delta)
     }
 
     // Swap pointers
-    double** tmp;
+    float** tmp;
     tmp = f->v; f->v = f->newV; f->newV = tmp;
     tmp = f->u; f->u = f->newU; f->newU = tmp;
 }
 
-void fluid_advect_smoke(Fluid *f, double delta)
+void fluid_advect_smoke(Fluid *f, float delta)
 {
     delta *= .1; // Scale for smoke speed
-    double samples = 100.0f;
-    double samples_half = 0.5f * samples;
+    float samples = 100.0f;
+    float samples_half = 0.5f * samples;
 
-    double x, y, u, v;
+    float x, y, u, v;
 
     for (int i = 1; i < f->height - 1; i++)
     {
@@ -368,7 +370,7 @@ void fluid_advect_smoke(Fluid *f, double delta)
             }
         }
     }
-    double** tmp = f->m;
+    float** tmp = f->m;
     f->m = f->newM;
     f->newM = tmp;
 }

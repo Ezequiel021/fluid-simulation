@@ -5,12 +5,14 @@ int draw_fps(SDL_Renderer* renderer, TTF_Font* font, float fps)
     char str[] = "FPS: 0000.0";
     sprintf(str, "FPS: %.1f", fps);
 
-    SDL_Color color = {255, 255, 255, 255};
+    SDL_Color color = {127, 127, 127, 255};
     SDL_Surface *surface = TTF_RenderText_Blended(font, str, color);
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
     SDL_Rect label = {0, 0, surface->w, surface->h};
     SDL_RenderCopy(renderer, texture, nullptr, &label);
+
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
 
     return 1;
 }
@@ -28,7 +30,7 @@ int main(int argc, char **argv)
 
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
-    SDL_CreateWindowAndRenderer(__WINDOW_W, __WINDOW_H, 0, &window, &renderer);
+    SDL_CreateWindowAndRenderer(WINDOW_W, WINDOW_H, 0, &window, &renderer);
     SDL_RenderSetScale(renderer, __RENDER_SCALE, __RENDER_SCALE);
 
     SDL_SetWindowTitle(window, "Fluidos - Elementos de CC");
@@ -51,12 +53,11 @@ int main(int argc, char **argv)
     int isPaused = 0;
     unsigned long NOW = SDL_GetPerformanceCounter();
     Uint64 LAST = 0;
-    double deltaTime = 0;
+    float deltaTime = 0;
 
     TTF_Font *font = TTF_OpenFont("roboto.ttf", 24);
 
-    SDL_Texture *target = nullptr;
-    SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, fluid.width, fluid.height);
+    SDL_Texture *target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, fluid.width, fluid.height);
 
     Uint32 *pixels = (Uint32 *) malloc(sizeof(Uint32) * fluid.width * fluid.height);
 
@@ -64,7 +65,7 @@ int main(int argc, char **argv)
     {
         LAST = NOW;
         NOW = SDL_GetPerformanceCounter();
-        deltaTime = (double)((NOW - LAST) * 1000 / (double)SDL_GetPerformanceFrequency());
+        deltaTime = (float)((NOW - LAST) * 1000 / (float)SDL_GetPerformanceFrequency());
         if (show_fps)
             printf("%f - %.1f fps   \r", deltaTime, 1000.0f / deltaTime);
 
@@ -95,7 +96,7 @@ int main(int argc, char **argv)
             }
         }
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderClear(renderer);
         update(renderer, deltaTime, &fluid, target, pixels);
         draw_fps(renderer, font, 1000.0 / deltaTime);

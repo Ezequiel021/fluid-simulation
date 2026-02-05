@@ -10,10 +10,10 @@
 #define __DEBUG 0
 #define __SHOW_FPS 0
 
-#define __WINDOW_W 640 * 2
-#define __WINDOW_H 480 * 2
+#define WINDOW_W (640 * 2)
+#define WINDOW_H (480 * 2)
 #define __RENDER_SCALE 1.0f
-#define __FRAMETIME 66
+#define FRAMETIME 66
 
 #define CELL_T_BORDER 0
 #define CELL_T_FLUID 1
@@ -52,39 +52,41 @@ typedef struct COLOR
 
 typedef struct FLUID
 {
-    double intake_speed;
-    double gravity;
+    float intake_speed;
+    float gravity;
     
-    double** u;
-    double** v;
-    double** newU;
-    double** newV;
-    double** scalar;
-    double** m;
-    double** newM;
+    float** u;
+    float** v;
+    float** newU;
+    float** newV;
+    float** scalar;
+    float** m;
+    float** newM;
 
+    // Grid height
     Uint32 height;
+    // Grid width
     Uint32 width;
 
 } Fluid;
 
-int new_double2D(double*** array, Uint32 rows, Uint32 cols);
+int new_float2D(float*** array, Uint32 rows, Uint32 cols);
 
 int fluid_setup(Fluid* f);
 
-void fluid_integrate(Fluid* f, double deltaTime);
+void fluid_integrate(Fluid* f, float deltaTime);
 
 void fluid_extrapolate(Fluid* f);
 
-int simulate(Fluid* f, double delta);
+int simulate(Fluid* f, float delta);
 
-int update(SDL_Renderer* renderer, double delta, Fluid* f, SDL_Texture *target, Uint32 *pixels);
+int update(SDL_Renderer* renderer, float delta, Fluid* f, SDL_Texture *target, Uint32 *pixels);
 
 int draw(SDL_Renderer* renderer, Fluid* f, SDL_Texture *target, Uint32 *pixels);
 
-double sampleField(double x, double y, int field, Fluid *f);
+float sampleField(float x, float y, int field, Fluid *f);
 
-void fluid_advect_velocity(Fluid* f, double delta);
+void fluid_advect_velocity(Fluid* f, float delta);
 
-void fluid_advect_smoke(Fluid* f, double delta);
+void fluid_advect_smoke(Fluid* f, float delta);
 #endif // UTILS_H
